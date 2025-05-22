@@ -66,9 +66,7 @@ def process(data: dict[str, Any]) -> dict[AsusData, Any]:
     # For this endpoint, the received data always depends on the sent request.
     # So, we need to check which data is available and process it accordingly.
     # Otherwise, we can accidentally overwrite the data with empty values.
-
     state: dict[AsusData, Any] = {}
-
     # Get the passed awrguments
     history: dict[AsusData, AsusDataState] = data_get(data, "history") or {}
     wlan = data_get(data, "wlan") or []

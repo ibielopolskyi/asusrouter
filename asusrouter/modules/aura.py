@@ -14,7 +14,7 @@ from asusrouter.modules.color import (
     parse_colors,
 )
 from asusrouter.modules.data import AsusData, AsusDataState
-from asusrouter.modules.endpoint import EndpointTools
+from asusrouter.modules.endpoint import EndpointTools, EndpointControl
 from asusrouter.modules.identity import AsusDevice
 from asusrouter.tools.converters import (
     get_arguments,
@@ -40,10 +40,24 @@ class AsusAura(IntEnum):
     WAVE = 6
     MARQUEE = 7
 
+class AsusAuraSingleZoneRGB(IntEnum):
+    STATIC = 1
+    BREATH = 2
+    FLASH = 3
+    STARRY = 13
+    GLOWING = 12
+    COLORCYCLE = 4
+    COMET = 8
+    RAINBOW = 5
+
+class AsusAuraSingleZoneColor(IntEnum):
+    """Asus Aura old API with color support """
+    STATIC = 1
+    BREATH = 2
+    FLASH = 3
 
 class AsusAuraColor(IntEnum):
     """Asus Aura with color support."""
-
     GRADIENT = 1
     STATIC = 2
     BREATHING = 3
@@ -187,7 +201,7 @@ async def set_state(
     identity: AsusDevice = kwargs.get("identity", AsusDevice())
     # Get the number of zones
     zones = identity.aura_zone
-    if zones < 1:
+    if zones < 1 and 'aura_rgb' not in identity.services:
         _LOGGER.debug("No Aura zones found. Skipping the Aura service.")
         return False
 
@@ -207,6 +221,11 @@ async def set_state(
         state = get_scheme_from_state(aura_state)
 
     # Check if the state has color support
+    if aura_state.get('oldeffect') and state.name not in AsusAuraSingleZoneColor.__members__:
+        return await callback(
+            endpoint=EndpointControl.COMMAND,
+            commands={"aurargb_enable": state.value, "action_mode": "apply", "rc_service": "start_aurargb"}
+        )
     if state.name not in AsusAuraColor.__members__:
         # No color selection for the state
         _LOGGER.debug(
@@ -218,40 +237,51 @@ async def set_state(
             commands={"ledg_scheme": state.value},
         )
 
+    if "oldeffect" not in aura_state:
     # Get the state number
-    state_number = AsusAuraColor[state.name].value
+        state_number = AsusAuraColor[state.name].value
 
-    # Get the previous colors / fallback to the default color
-    colors = aura_state.get("effect", {}).get(
-        state_number, get_default_aura_color(zones)
-    )
-    # Convert to ColorRGBB if needed
-    colors = [
-        ColorRGBB(color) if isinstance(color, ColorRGB) else color
-        for color in colors
-    ]
+        # Get the previous colors / fallback to the default color
+        colors = aura_state.get("effect", {}).get(
+            state_number, get_default_aura_color(zones)
+        )
+        # Convert to ColorRGBB if needed
+        colors = [
+            ColorRGBB(color) if isinstance(color, ColorRGB) else color
+            for color in colors
+        ]
 
-    # Set new color(s) and brightness
-    set_color(colors, color_to_set, zone, zones)
-    set_brightness(colors, brightness, zone)
+        # Set new color(s) and brightness
+        set_color(colors, color_to_set, zone, zones)
+        set_brightness(colors, brightness, zone)
 
-    # Convert color_set to the string
-    color_to_use = ",".join(
-        [color_zone.to_rgb().__str__() for color_zone in colors]
-    )
-    _LOGGER.debug("Setting the Aura color to `%s`", color_to_use)
+        # Convert color_set to the string
+        color_to_use = ",".join(
+            [color_zone.to_rgb().__str__() for color_zone in colors]
+        )
+        _LOGGER.debug("Setting the Aura color to `%s`", color_to_use)
 
-    # Prepare the arguments
-    arguments = {
-        "ledg_scheme": state.value,
-        "ledg_rgb": color_to_use,
-    }
+        # Prepare the arguments
+        arguments = {
+            "ledg_scheme": state.value,
+            "ledg_rgb": color_to_use,
+        }
 
-    # Run the service
-    return await callback(
-        endpoint=EndpointTools.AURA,
-        commands=arguments,
-    )
+        # Run the service
+        return await callback(
+            endpoint=EndpointTools.AURA,
+            commands=arguments,
+        )
+    else:
+        state_number = AsusAuraSingleZoneColor[state.name].value
+        color = aura_state["active"]["color"]
+        if color_to_set:
+            color = color_to_set
+        return await callback(
+            endpoint=EndpointControl.COMMAND,
+            commands={"aurargb_enable": 1, "aurargb_val": ','.join([str(color), str(state_number), '0', '0']), "action_mode": "apply", "rc_service": "start_aurargb"}
+        )
+
 
 
 def process_aura(data: dict[str, Any]) -> dict[str, Any]:
@@ -306,10 +336,20 @@ def process_aura(data: dict[str, Any]) -> dict[str, Any]:
         aura["active"]["color"] = active_color
         aura["active"]["brightness"] = _active_brightness
 
-    print(aura["effect"])
-
     # Get number of zones from the Static effect length
     _effect_static = aura["effect"].get(AsusAuraColor.STATIC)
     aura["zones"] = len(_effect_static) if _effect_static else 0
+    # Singular zone uses a different data structure.
+    if (len(data["aurargb_val"].split(',')) == 6 and data["aurargb_enable"] != ""):
+        try:
+            val = [int(i) for i in data["aurargb_val"].split(',')]
+            active_color = ColorRGB(*val[:3], scale=255)
+            aura["active"]["color"] = active_color
+        except:
+            pass
+        aura["state"] = safe_bool(data["aurargb_enable"])
+
+        aura["oldeffect"] = val[4]
+        aura["zones"] = 1
 
     return aura

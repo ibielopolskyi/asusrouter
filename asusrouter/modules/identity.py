@@ -51,6 +51,7 @@ MAP_IDENTITY: Tuple = (
     ("led_val", "led", safe_exists),
     ("ledg_rgb1", "aura", safe_exists),
     ("ledg_rgb2", "aura_zone", color_zone),
+    ("aurargb_val", "aura", safe_exists),
 )
 
 
@@ -163,8 +164,11 @@ def _read_nvram(data: dict[str, Any]) -> dict[str, Any]:
             if key_to_use in identity:
                 if isinstance(identity[key_to_use], list):
                     identity[key_to_use].extend(value)
-                else:
+                elif identity[key_to_use] != True:
                     identity[key_to_use] = value
+                else:
+                    # If multiple keys set an identity, do not override True.
+                    pass
             else:
                 identity[key_to_use] = value
         except Exception as ex:

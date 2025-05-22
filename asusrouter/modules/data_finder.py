@@ -136,6 +136,7 @@ ASUSDATA_NVRAM = {
     ]
 }
 ASUSDATA_NVRAM["aura"].extend([f"ledg_rgb{num}" for num in range(0, 8)])
+ASUSDATA_NVRAM["aura"].extend(["aurargb_val", "aurargb_enable"])
 ASUSDATA_NVRAM["vpnc"].extend(
     [
         f"wgc{num}_{key}"
