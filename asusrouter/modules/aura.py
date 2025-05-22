@@ -24,7 +24,7 @@ from asusrouter.tools.converters import (
 )
 
 _LOGGER = logging.getLogger(__name__)
-
+_LOGGER.setLevel(logging.DEBUG)
 
 class AsusAura(IntEnum):
     """Asus Aura state."""
