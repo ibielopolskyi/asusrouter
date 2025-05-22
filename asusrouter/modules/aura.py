@@ -221,7 +221,7 @@ async def set_state(
         state = get_scheme_from_state(aura_state)
 
     # Check if the state has color support
-    if 'oldeffect' in state and state.name not in AsusAuraSingleZoneColor.__members__:
+    if 'oldeffect' in aura_state and state.name not in AsusAuraSingleZoneColor.__members__:
         return await callback(
             endpoint=EndpointControl.COMMAND,
             commands={"aurargb_enable": state.value, "action_mode": "apply", "rc_service": "start_aurargb"}
